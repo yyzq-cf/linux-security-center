@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}设置 · Linux 安全中心{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>设置</h1>
+    <div class="subtitle">账号安全 · 二步验证 · 主题偏好</div>
+</div>
+
+{% if error %}
+<div class="card" style="border-color: var(--red);">
+    <div style="color: var(--red); padding: 8px 0;">⚠️ {{ error }}</div>
+</div>
+{% endif %}
+{% if success %}
+<div class="card" style="border-color: var(--green);">
+    <div style="color: var(--green); padding: 8px 0;">✅ {{ success }}</div>
+</div>
+{% endif %}
+
+<div class="grid grid-2">
+    <!-- 修改密码 -->
+    <div class="card">
+        <div class="card-title">🔑 修改密码</div>
+        <form method="POST" action="{{ url_for('main.settings') }}#password">
+            <input type="hidden" name="action" value="change_password">
+            <div class="form-group">
+                <label style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">旧密码</label>
+                <input type="password" name="old_password" required
+                       style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg, var(--bg)); color:var(--text); font-size:14px; outline:none;">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">新密码</label>
+                <input type="password" name="new_password" required
+                       style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg, var(--bg)); color:var(--text); font-size:14px; outline:none;">
+            </div>
+            <div class="form-group">
+                <label style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">确认新密码</label>
+                <input type="password" name="confirm_password" required
+                       style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg, var(--bg)); color:var(--text); font-size:14px; outline:none;">
+            </div>
+            <button type="submit" class="btn-login" style="width:100%; padding:12px; border:none; border-radius:8px; background:var(--accent); color:var(--bg); font-size:14px; font-weight:600; cursor:pointer;">修改密码</button>
+        </form>
+    </div>
+
+    <!-- 二步验证 -->
+    <div class="card">
+        <div class="card-title">📱 二步验证 (2FA)</div>
+
+        {% if twofa_enabled %}
+        <div style="text-align:center; padding: 20px 0;">
+            <div style="font-size:48px; margin-bottom:12px;">✅</div>
+            <div style="color:var(--green); font-size:16px; font-weight:600;">二步验证已启用</div>
+            <div style="color:var(--text-dim); font-size:13px; margin-top:4px;">登录时需要输入验证码</div>
+        </div>
+        <form method="POST" action="{{ url_for('main.settings') }}#2fa">
+            <input type="hidden" name="action" value="disable_2fa">
+            <div class="form-group">
+                <label style="display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px;">输入验证码以确认关闭</label>
+                <input type="text" name="code" placeholder="123456" maxlength="6" pattern="\d{6}" required
+                       style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg, var(--bg)); color:var(--text); font-size:14px; outline:none; text-align:center; letter-spacing:4px;">
+            </div>
+            <button type="submit" class="btn-login" style="width:100%; padding:12px; border:none; border-radius:8px; background:var(--red); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">关闭二步验证</button>
+        </form>
+
+        {% elif setup_2fa %}
+        <!-- 显示二维码让用户扫描 -->
+        <div style="text-align:center; padding: 12px 0;">
+            <div style="color:var(--text); font-size:14px; margin-bottom:16px;">
+                <strong>步骤 1:</strong> 用验证器App扫码
+            </div>
+            <img src="{{ qr_data_uri }}" alt="QR Code"
+                 style="border-radius:12px; border:1px solid var(--border); max-width:220px;">
+            <div style="margin-top:16px;">
+                <details>
+                    <summary style="cursor:pointer; color:var(--text-dim); font-size:13px;">无法扫码？手动输入密钥</summary>
+                    <div style="margin-top:8px; font-family:monospace; font-size:14px; color:var(--accent);
+                                background:var(--bg); padding:10px; border-radius:8px; word-break:break-all;">
+                        {{ totp_secret }}
+                    </div>
+                </details>
+            </div>
+        </div>
+        <div style="margin-top:20px; color:var(--text); font-size:14px; margin-bottom:8px;">
+            <strong>步骤 2:</strong> 输入App上显示的6位验证码以确认
+        </div>
+        <form method="POST" action="{{ url_for('main.settings') }}#2fa">
+            <input type="hidden" name="action" value="confirm_2fa">
+            <input type="hidden" name="secret" value="{{ totp_secret }}">
+            <div class="form-group">
+                <input type="text" name="code" placeholder="123456" maxlength="6" pattern="\d{6}" required
+                       style="width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg, var(--bg)); color:var(--text); font-size:20px; outline:none; text-align:center; letter-spacing:8px;">
+            </div>
+            <button type="submit" class="btn-login" style="width:100%; padding:12px; border:none; border-radius:8px; background:var(--green); color:var(--bg); font-size:14px; font-weight:600; cursor:pointer;">确认启用</button>
+        </form>
+
+        {% else %}
+        <div style="text-align:center; padding: 20px 0;">
+            <div style="font-size:48px; margin-bottom:12px;">📱</div>
+            <div style="color:var(--text-dim); font-size:16px;">二步验证未启用</div>
+            <div style="color:var(--text-dim); font-size:13px; margin-top:4px;">启用后登录需输入动态验证码</div>
+        </div>
+        <form method="POST" action="{{ url_for('main.settings') }}#2fa">
+            <input type="hidden" name="action" value="setup_2fa">
+            <button type="submit" class="btn-login" style="width:100%; padding:12px; border:none; border-radius:8px; background:var(--accent); color:var(--bg); font-size:14px; font-weight:600; cursor:pointer;">开始设置二步验证</button>
+        </form>
+        {% endif %}
+
+        <div style="margin-top:16px; font-size:12px; color:var(--text-dim); line-height:1.6;">
+            支持 Google Authenticator / Microsoft Authenticator / Authy 等 TOTP 应用
+        </div>
+    </div>
+</div>
+
+<!-- 登录会话信息 -->
+<div class="card">
+    <div class="card-title">ℹ️ 账号信息</div>
+    <div class="info-row"><span class="key">用户名</span><span class="val mono">{{ username }}</span></div>
+    <div class="info-row"><span class="key">二步验证</span><span class="val">{% if twofa_enabled %}<span class="badge pass">已启用</span>{% else %}<span class="badge warn">未启用</span>{% endif %}</span></div>
+    <div class="info-row"><span class="key">配置文件</span><span class="val mono" style="font-size:12px">/data/auth_config.json</span></div>
+</div>
+{% endblock %}

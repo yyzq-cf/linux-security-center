@@ -1,0 +1,6 @@
+flask==3.0.3
+gunicorn==22.0.0
+psutil==5.9.8
+pyotp==2.9.0
+qrcode==7.4.2
+Pillow==10.4.0

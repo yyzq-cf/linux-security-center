@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 · Linux 安全中心{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>仪表盘</h1>
+    <div class="subtitle">{{ sysinfo.hostname|default('localhost') }} · {{ sysinfo.os|default('Linux') }} · 实时安全概览</div>
+</div>
+
+<!-- 顶部统计 -->
+<div class="grid grid-4" style="margin-bottom:20px">
+    <div class="card stat">
+        <div class="value red">{{ brute.total_failed }}</div>
+        <div class="label">失败登录 (7天)</div>
+    </div>
+    <div class="card stat">
+        <div class="value accent">{{ brute.unique_attacker_ips }}</div>
+        <div class="label">攻击源IP数</div>
+    </div>
+    <div class="card stat">
+        <div class="value yellow">{{ brute.dangerous_ip_count }}</div>
+        <div class="label">高危IP (>50次)</div>
+    </div>
+    <div class="card stat">
+        <div class="value green">{{ brute.total_accepted }}</div>
+        <div class="label">成功登录 (7天)</div>
+    </div>
+</div>
+
+<div class="grid grid-3">
+    <!-- 安全评分 -->
+    <div class="card">
+        <div class="card-title">⚡ 安全评分</div>
+        <div class="score-ring">
+            <svg width="140" height="140">
+                <circle cx="70" cy="70" r="60" fill="none" stroke="var(--border)" stroke-width="8"/>
+                <circle cx="70" cy="70" r="60" fill="none"
+                    stroke="{% if score >= 80 %}var(--green){% elif score >= 60 %}var(--yellow){% else %}var(--red){% endif %}"
+                    stroke-width="8"
+                    stroke-dasharray="{{ (score / 100) * 377 }}"
+                    stroke-linecap="round"
+                    style="transition:stroke-dasharray 1s"/>
+            </svg>
+            <div class="num">
+                <span style="color:{% if score >= 80 %}var(--green){% elif score >= 60 %}var(--yellow){% else %}var(--red){% endif %}">{{ score }}</span>
+                <small>/ 100</small>
+            </div>
+        </div>
+        <div style="margin-top:16px;text-align:center;font-size:13px">
+            {% if score >= 80 %}🟢 安全状况良好
+            {% elif score >= 60 %}🟡 存在安全隐患
+            {% else %}🔴 安全风险较高{% endif %}
+        </div>
+    </div>
+
+    <!-- SSH安全摘要 -->
+    <div class="card">
+        <div class="card-title">🔐 SSH 配置</div>
+        <div class="grid grid-3" style="gap:8px">
+            <div class="stat">
+                <div class="value green" style="font-size:28px">{{ pass_ssh }}</div>
+                <div class="label">通过</div>
+            </div>
+            <div class="stat">
+                <div class="value yellow" style="font-size:28px">{{ warn_ssh }}</div>
+                <div class="label">警告</div>
+            </div>
+            <div class="stat">
+                <div class="value red" style="font-size:28px">{{ fail_ssh }}</div>
+                <div class="label">不安全</div>
+            </div>
+        </div>
+        <div style="margin-top:16px">
+            {% for item in ssh[:5] %}
+            <div class="info-row">
+                <span class="key">{{ item.item }}</span>
+                <span class="badge {{ item.status }}">{{ item.status|upper }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 防火墙/fail2ban -->
+    <div class="card">
+        <div class="card-title">🧱 防护措施</div>
+        <div class="info-row">
+            <span class="key">Fail2Ban</span>
+            {% if f2b.active %}
+                <span class="badge pass">运行中 ({{ f2b.jails|length }} jails)</span>
+            {% else %}
+                <span class="badge fail">未运行</span>
+            {% endif %}
+        </div>
+        {% for f in fw %}
+        <div class="info-row">
+            <span class="key">{{ f.name }}</span>
+            {% if f.active %}
+                <span class="badge pass">活跃</span>
+            {% else %}
+                <span class="badge fail">未启用</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="info-row">
+            <span class="key">CPU</span>
+            <span class="val">{{ sysinfo.cpu_percent|default(0)|round(1) }}% ({{ sysinfo.cpu_cores|default('?') }}核)</span>
+        </div>
+        <div class="info-row">
+            <span class="key">内存</span>
+            <span class="val">{{ sysinfo.mem_used|default('?') }}/{{ sysinfo.mem_total|default('?') }} ({{ sysinfo.mem_percent|default(0)|round(1) }}%)</span>
+        </div>
+        <div class="progress">
+            <div class="progress-bar {% if (sysinfo.mem_percent or 0) > 80 %}red{% elif (sysinfo.mem_percent or 0) > 60 %}yellow{% else %}green{% endif %}"
+                 style="width:{{ sysinfo.mem_percent|default(0) }}%"></div>
+        </div>
+        <div class="info-row" style="margin-top:8px">
+            <span class="key">磁盘</span>
+            <span class="val">{{ sysinfo.disk_percent|default(0)|round(1) }}%</span>
+        </div>
+        <div class="progress">
+            <div class="progress-bar {% if (sysinfo.disk_percent or 0) > 85 %}red{% elif (sysinfo.disk_percent or 0) > 70 %}yellow{% else %}green{% endif %}"
+                 style="width:{{ sysinfo.disk_percent|default(0) }}%"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 暴力破解时间线 + TOP IP -->
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-title">📊 7天攻击趋势</div>
+        {% if brute.timeline %}
+        <div class="chart-container">
+            {% for date, count in brute.timeline.items() %}
+            <div class="chart-bar" data-val="{{ date }}: {{ count }}次"
+                 style="height:{% if brute.timeline.values()|max > 0 %}{{ (count / (brute.timeline.values()|max) * 100)|round }}%{% else %}0%{% endif %}"></div>
+            {% endfor %}
+        </div>
+        <div class="chart-labels">
+            {% for date in brute.timeline.keys() %}
+            <span>{{ date[5:] }}</span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center;color:var(--text-dim);padding:40px 0">暂无数据</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-title">🚨 TOP 10 攻击源IP</div>
+        <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>IP 地址</th><th>次数</th><th>尝试用户</th><th>级别</th></tr>
+            </thead>
+            <tbody>
+                {% for ip in brute.top_ips %}
+                <tr>
+                    <td class="mono">{{ ip.ip }}</td>
+                    <td><strong>{{ ip.count }}</strong></td>
+                    <td style="font-size:12px;color:var(--text-dim)">{{ ip.users }}</td>
+                    <td><span class="badge {{ ip.danger }}">{{ ip.danger }}</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" style="text-align:center;color:var(--text-dim)">未检测到攻击</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <div style="margin-top:12px;text-align:right">
+            <a href="{{ url_for('main.brute_force') }}" style="color:var(--accent);text-decoration:none;font-size:13px">查看全部 →</a>
+        </div>
+    </div>
+</div>
+
+<!-- 最近事件 -->
+<div class="card">
+    <div class="card-title">📋 最近攻击事件</div>
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>时间</th><th>类型</th><th>用户</th><th>来源IP</th><th>原始日志</th></tr>
+        </thead>
+        <tbody>
+            {% for e in brute.recent_events[:20] %}
+            <tr>
+                <td class="mono" style="white-space:nowrap">{{ e.time }}</td>
+                <td><span class="badge fail">{{ e.type }}</span></td>
+                <td class="mono">{{ e.user }}</td>
+                <td class="mono">{{ e.ip }}</td>
+                <td><div class="log-line">{{ e.raw[:120] }}</div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center;color:var(--text-dim)">暂无事件</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}

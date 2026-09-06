@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Linux 安全中心{% endblock %}</title>
+    <style>
+        /* ===== 双主题 CSS 变量 ===== */
+        :root[data-theme="dark"] {
+            --bg: #0a0e17;
+            --card: #131826;
+            --card-hover: #1a2030;
+            --border: #1e2a3e;
+            --text: #e0e6ed;
+            --text-dim: #6b7a8f;
+            --accent: #00d4ff;
+            --green: #00e676;
+            --yellow: #ffab00;
+            --red: #ff3d4e;
+            --orange: #ff6d00;
+            --navbar-bg: linear-gradient(135deg, #0d1520 0%, #131826 100%);
+            --input-bg: #0d1117;
+            --shadow: 0 4px 20px rgba(0,0,0,.3);
+        }
+        :root[data-theme="light"] {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --card-hover: #f5f7fa;
+            --border: #dce1e8;
+            --text: #1a202c;
+            --text-dim: #6b7280;
+            --accent: #0066cc;
+            --green: #00875a;
+            --yellow: #b88600;
+            --red: #d1242f;
+            --orange: #e8590c;
+            --navbar-bg: linear-gradient(135deg, #ffffff 0%, #f5f7fa 100%);
+            --input-bg: #f5f7fa;
+            --shadow: 0 2px 12px rgba(0,0,0,.08);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            transition: background .3s, color .3s;
+        }
+
+        /* ===== 顶栏 ===== */
+        .navbar {
+            background: var(--navbar-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            position: sticky; top: 0; z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        .navbar .logo {
+            font-size: 20px; font-weight: 700;
+            color: var(--accent);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .navbar .logo .icon { font-size: 24px; }
+        .navbar nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+        .navbar nav a, .navbar nav button.nav-link {
+            color: var(--text-dim);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all .2s;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .navbar nav a:hover, .navbar nav button.nav-link:hover {
+            color: var(--text);
+            background: var(--card-hover);
+        }
+        .navbar nav a.active {
+            color: var(--accent);
+            background: rgba(0,212,255,.1);
+        }
+
+        /* 主题切换 */
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            width: 36px; height: 36px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s;
+            margin-right: 8px;
+        }
+        .theme-toggle:hover { border-color: var(--accent); }
+
+        /* 用户下拉 */
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+        .user-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 6px 14px;
+            cursor: pointer;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all .2s;
+        }
+        .user-btn:hover { border-color: var(--accent); }
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            min-width: 160px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 200;
+        }
+        .user-dropdown.show { display: block; }
+        .user-dropdown a {
+            display: block;
+            padding: 10px 16px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 14px;
+            transition: background .2s;
+        }
+        .user-dropdown a:hover { background: var(--card-hover); }
+        .user-dropdown a.danger { color: var(--red); }
+        .user-dropdown .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 0;
+        }
+
+        /* ===== 主体 ===== */
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .page-header { margin-bottom: 24px; }
+        .page-header h1 { font-size: 28px; font-weight: 700; }
+        .page-header .subtitle { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+
+        /* ===== 卡片 ===== */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: border-color .2s, background .3s;
+        }
+        .card:hover { border-color: rgba(0,212,255,.3); }
+        .card-title {
+            font-size: 14px; font-weight: 600;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* ===== 网格 ===== */
+        .grid { display: grid; gap: 20px; }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        @media(max-width: 900px) {
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+        }
+
+        /* 统计数字 */
+        .stat { text-align: center; }
+        .stat .value {
+            font-size: 36px; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat .label { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+        .stat .value.red { color: var(--red); }
+        .stat .value.green { color: var(--green); }
+        .stat .value.yellow { color: var(--yellow); }
+        .stat .value.accent { color: var(--accent); }
+        .stat .value.orange { color: var(--orange); }
+
+        /* 安全评分环 */
+        .score-ring {
+            width: 140px; height: 140px;
+            position: relative;
+            margin: 0 auto;
+        }
+        .score-ring svg { transform: rotate(-90deg); }
+        .score-ring .num {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .score-ring .num span { font-size: 42px; font-weight: 700; }
+        .score-ring .num small { display:block; color: var(--text-dim); font-size: 12px; }
+
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            text-align: left; font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: .5px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        tr:hover td { background: var(--card-hover); }
+        .mono { font-family: 'SF Mono', 'Cascadia Code', monospace; }
+
+        /* 徽章 */
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge.pass   { background: rgba(0,230,118,.15); color: var(--green); }
+        .badge.fail   { background: rgba(255,61,78,.15); color: var(--red); }
+        .badge.warn   { background: rgba(255,171,0,.15); color: var(--yellow); }
+        .badge.info   { background: rgba(0,212,255,.15); color: var(--accent); }
+        .badge.high   { background: rgba(255,61,78,.2); color: var(--red); }
+        .badge.medium { background: rgba(255,171,0,.2); color: var(--yellow); }
+        .badge.low    { background: rgba(0,230,118,.15); color: var(--green); }
+        .badge.public { background: rgba(255,61,78,.2); color: var(--red); }
+        .badge.local  { background: rgba(0,230,118,.15); color: var(--green); }
+
+        /* 按钮 */
+        .btn {
+            padding: 4px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all .2s;
+        }
+        .btn:hover { border-color: var(--red); color: var(--red); }
+
+        /* 进度条 */
+        .progress {
+            height: 6px;
+            background: var(--bg);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width .5s;
+        }
+        .progress-bar.green { background: var(--green); }
+        .progress-bar.yellow { background: var(--yellow); }
+        .progress-bar.red { background: var(--red); }
+
+        /* 图表 */
+        .chart-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 120px;
+            padding-top: 10px;
+        }
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--accent) 0%, rgba(0,212,255,.3) 100%);
+            border-radius: 3px 3px 0 0;
+            min-height: 2px;
+            position: relative;
+            cursor: pointer;
+            transition: opacity .2s;
+        }
+        .chart-bar:hover { opacity: .8; }
+        .chart-bar:hover::after {
+            content: attr(data-val);
+            position: absolute;
+            top: -24px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            background: var(--card-hover);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .chart-labels {
+            display: flex; gap: 4px; margin-top: 6px;
+        }
+        .chart-labels span {
+            flex: 1; text-align: center;
+            font-size: 10px; color: var(--text-dim);
+            overflow: hidden;
+        }
+
+        /* 信息行 */
+        .info-row {
+            display: flex; justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .info-row:last-child { border: none; }
+        .info-row .key { color: var(--text-dim); }
+        .info-row .val { font-weight: 500; }
+
+        /* 筛选条 */
+        .filter-bar {
+            display: flex; gap: 8px; margin-bottom: 20px;
+        }
+        .filter-bar a {
+            padding: 6px 16px;
+            border-radius: 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all .2s;
+        }
+        .filter-bar a:hover { border-color: var(--accent); }
+        .filter-bar a.active {
+            background: rgba(0,212,255,.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-dim);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+
+        .table-wrap { overflow-x: auto; }
+
+        @keyframes pulse {
+            0%,100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .pulse { animation: pulse 2s infinite; }
+
+        .log-line {
+            font-family: monospace;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0,0,0,.3);
+            color: var(--text-dim);
+            margin-top: 4px;
+            word-break: break-all;
+        }
+
+        /* 表单 */
+        .form-group { margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="logo">
+            <span class="icon">🛡️</span>
+            <span>Linux 安全中心</span>
+        </div>
+        <nav>
+            <a href="{{ url_for('main.index') }}" class="{% if request.endpoint == 'main.index' %}active{% endif %}">仪表盘</a>
+            <a href="{{ url_for('main.brute_force') }}" class="{% if request.endpoint == 'main.brute_force' %}active{% endif %}">暴力破解</a>
+            <a href="{{ url_for('main.security_audit') }}" class="{% if request.endpoint == 'main.security_audit' %}active{% endif %}">安全审计</a>
+
+            <!-- 主题切换 -->
+            <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="切换明暗主题">🌙</button>
+
+            <!-- 用户菜单 -->
+            <div class="user-menu">
+                <button class="user-btn" onclick="toggleUserMenu()">
+                    👤 {{ current_user|default('admin') }}
+                    <span style="font-size:10px;">▼</span>
+                </button>
+                <div class="user-dropdown" id="userDropdown">
+                    <a href="{{ url_for('main.settings') }}">⚙️ 设置</a>
+                    <div class="divider"></div>
+                    <a href="{{ url_for('main.logout') }}" class="danger">🚪 退出登录</a>
+                </div>
+            </div>
+        </nav>
+    </div>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    <div class="footer">
+        Linux Security Center · 运行于 Docker · 数据实时分析 ·
+        仅供审计参考，不替代专业安全工具
+    </div>
+
+    <script>
+    // ===== 主题切换 =====
+    function toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        document.getElementById('themeBtn').textContent = next === 'dark' ? '🌙' : '☀️';
+    }
+    (function() {
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        const btn = document.getElementById('themeBtn');
+        if (btn) btn.textContent = saved === 'dark' ? '🌙' : '☀️';
+    })();
+
+    // ===== 用户菜单 =====
+    function toggleUserMenu() {
+        document.getElementById('userDropdown').classList.toggle('show');
+    }
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.user-menu')) {
+            const d = document.getElementById('userDropdown');
+            if (d) d.classList.remove('show');
+        }
+    });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

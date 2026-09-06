@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}安全审计 · Linux 安全中心{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>安全审计</h1>
+    <div class="subtitle">SSH配置 · 防火墙 · 端口暴露 · 用户权限 · SUID文件 · 系统更新</div>
+</div>
+
+<!-- 评分概览 -->
+<div class="grid grid-4" style="margin-bottom:20px">
+    <div class="card stat">
+        <div class="value {% if score >= 80 %}green{% elif score >= 60 %}yellow{% else %}red{% endif %}">{{ score }}</div>
+        <div class="label">安全评分</div>
+    </div>
+    <div class="card stat">
+        <div class="value green">{{ counts.ssh_pass }}</div>
+        <div class="label">SSH项通过</div>
+    </div>
+    <div class="card stat">
+        <div class="value red">{{ counts.ssh_fail + counts.ssh_warn }}</div>
+        <div class="label">SSH项告警</div>
+    </div>
+    <div class="card stat">
+        <div class="value yellow">{{ counts.public_ports }}</div>
+        <div class="label">公网暴露端口</div>
+    </div>
+</div>
+
+<!-- SSH 配置审计 -->
+<div class="card">
+    <div class="card-title">🔐 SSH 配置审计</div>
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>检查项</th><th>状态</th><th>详情</th><th>建议</th></tr></thead>
+        <tbody>
+            {% for item in ssh %}
+            <tr>
+                <td><strong>{{ item.item }}</strong></td>
+                <td><span class="badge {{ item.status }}">{{ item.status|upper }}</span></td>
+                <td>{{ item.detail }}</td>
+                <td style="color:var(--yellow)">{{ item.recommend|default('—') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <!-- 防火墙 -->
+    <div class="card">
+        <div class="card-title">🧱 防火墙状态</div>
+        <table>
+            <thead><tr><th>防火墙</th><th>状态</th><th>详情</th></tr></thead>
+            <tbody>
+                {% for f in fw %}
+                <tr>
+                    <td><strong>{{ f.name }}</strong></td>
+                    <td>
+                        {% if f.active %}
+                            <span class="badge pass">活跃</span>
+                        {% else %}
+                            <span class="badge fail">未启用</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:13px;color:var(--text-dim)">{{ f.detail }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not fw %}
+        <div style="text-align:center;color:var(--text-dim);padding:20px">未检测到防火墙</div>
+        {% endif %}
+    </div>
+
+    <!-- Fail2Ban -->
+    <div class="card">
+        <div class="card-title">🤖 Fail2Ban</div>
+        {% if f2b.installed and f2b.active %}
+        <div class="info-row">
+            <span class="key">状态</span>
+            <span class="badge pass">运行中</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Jail 数量</span>
+            <span class="val">{{ f2b.jails|length }}</span>
+        </div>
+        <div class="info-row">
+            <span class="key">Jails</span>
+            <span class="val">{{ f2b.jails|join(', ') }}</span>
+        </div>
+        {% elif f2b.installed %}
+        <div class="info-row">
+            <span class="key">状态</span>
+            <span class="badge warn">已安装未运行</span>
+        </div>
+        <div style="margin-top:12px;color:var(--yellow);font-size:13px">
+            建议: systemctl start fail2ban
+        </div>
+        {% else %}
+        <div class="info-row">
+            <span class="key">状态</span>
+            <span class="badge fail pulse">未安装</span>
+        </div>
+        <div style="margin-top:12px;color:var(--yellow);font-size:13px">
+            建议: apt install fail2ban -y
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 监听端口 -->
+<div class="card">
+    <div class="card-title">🔌 监听端口扫描</div>
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>协议</th><th>地址</th><th>端口</th><th>进程</th><th>暴露范围</th><th>风险</th></tr></thead>
+        <tbody>
+            {% for p in ports %}
+            <tr>
+                <td class="mono">{{ p.proto }}</td>
+                <td class="mono">{{ p.addr }}</td>
+                <td><strong>{{ p.port }}</strong></td>
+                <td class="mono" style="font-size:12px">{{ p.process }}</td>
+                <td>
+                    {% if p.exposure == 'public' %}
+                        <span class="badge public">公网暴露</span>
+                    {% elif p.exposure == 'local' %}
+                        <span class="badge local">仅本机</span>
+                    {% else %}
+                        <span class="badge info">特定地址</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if p.risk %}
+                        <span class="badge fail">{{ p.risk }} 不应公网暴露!</span>
+                    {% else %}
+                        <span class="badge pass">正常</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;color:var(--text-dim)">无法获取端口信息</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<!-- 用户审计 -->
+<div class="card">
+    <div class="card-title">👥 用户与权限审计</div>
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>检查项</th><th>状态</th><th>详情</th><th>建议</th></tr></thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><strong>{{ u.item }}</strong></td>
+                <td><span class="badge {{ u.status }}">{{ u.status|upper }}</span></td>
+                <td>{{ u.detail }}</td>
+                <td style="color:var(--yellow)">{{ u.recommend|default('—') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<!-- SUID/SGID -->
+<div class="card">
+    <div class="card-title">🔎 SUID/SGID 文件扫描</div>
+    {% if suid %}
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>文件路径</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+            {% for s in suid %}
+            <tr>
+                <td class="mono">{{ s.path }}</td>
+                <td><span class="badge {{ s.status }}">{{ s.status|upper }}</span></td>
+                <td>{{ s.detail }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% if counts.suid_warn > 0 %}
+    <div style="margin-top:12px;color:var(--yellow);font-size:13px">
+        ⚠️ 发现 {{ counts.suid_warn }} 个非标准SUID文件，请确认是否为已知软件所需
+    </div>
+    {% endif %}
+    {% else %}
+    <div style="text-align:center;color:var(--text-dim);padding:20px">无法扫描(可能需要root权限)</div>
+    {% endif %}
+</div>
+
+<!-- 系统更新 -->
+<div class="card">
+    <div class="card-title">📦 系统更新</div>
+    {% if updates.available %}
+    <div class="info-row">
+        <span class="key">可升级包</span>
+        <span class="badge warn">{{ updates.count }} 个</span>
+    </div>
+    <div style="margin-top:12px">
+        {% for d in updates.details %}
+        <div class="log-line">{{ d }}</div>
+        {% endfor %}
+        {% if updates.count > 20 %}
+        <div style="margin-top:8px;color:var(--text-dim);font-size:12px">...以及其他 {{ updates.count - 20 }} 个</div>
+        {% endif %}
+    </div>
+    <div style="margin-top:12px;color:var(--yellow);font-size:13px">
+        建议: apt update && apt upgrade -y
+    </div>
+    {% else %}
+    <div class="info-row">
+        <span class="key">可升级包</span>
+        <span class="badge pass">系统已最新</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 系统信息 -->
+<div class="card">
+    <div class="card-title">💻 系统信息</div>
+    <div class="grid grid-2">
+        <div>
+            <div class="info-row"><span class="key">主机名</span><span class="val">{{ sysinfo.hostname|default('—') }}</span></div>
+            <div class="info-row"><span class="key">系统</span><span class="val">{{ sysinfo.os|default('—') }}</span></div>
+            <div class="info-row"><span class="key">内核</span><span class="val">{{ sysinfo.kernel|default('—') }}</span></div>
+            <div class="info-row"><span class="key">架构</span><span class="val">{{ sysinfo.arch|default('—') }}</span></div>
+        </div>
+        <div>
+            <div class="info-row"><span class="key">运行时间</span><span class="val" style="font-size:12px">{{ sysinfo.uptime|default('—') }}</span></div>
+            <div class="info-row"><span class="key">CPU</span><span class="val">{{ sysinfo.cpu_cores|default('—') }}核 / {{ sysinfo.cpu_percent|default(0)|round(1) }}%</span></div>
+            <div class="info-row"><span class="key">内存</span><span class="val">{{ sysinfo.mem_used|default('?') }}/{{ sysinfo.mem_total|default('?') }}</span></div>
+            <div class="info-row"><span class="key">磁盘</span><span class="val">{{ sysinfo.disk_percent|default(0)|round(1) }}%</span></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+services:
+  security-center:
+    build: .
+    container_name: security-center
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      # 持久化认证配置（密码hash/2FA密钥）
+      - sec_center_data:/data
+      # 系统日志和配置（只读）
+      - /var/log:/var/log:ro
+      - /etc/ssh:/etc/ssh:ro
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/shadow:/etc/shadow:ro
+      - /etc/group:/etc/group:ro
+      - /etc/hostname:/etc/hostname:ro
+      - /etc/os-release:/etc/os-release:ro
+      - /etc/localtime:/etc/localtime:ro
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    pid: host
+    environment:
+      - TZ=Asia/Shanghai
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=admin123
+      - DATA_DIR=/data
+
+volumes:
+  sec_center_data:
