@@ -1,9 +1,6 @@
 """Flask 应用工厂"""
 from flask import Flask
-from flask_sock import Sock
 import os
-
-sock = Sock()
 
 
 def create_app():
@@ -14,12 +11,7 @@ def create_app():
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-    sock.init_app(app)
-
     from .routes import bp as main_bp
     app.register_blueprint(main_bp)
-
-    from .terminal import register_terminal_ws
-    register_terminal_ws(sock)
 
     return app

@@ -172,13 +172,6 @@ def security_audit():
                            score=score, counts=counts, current_user=get_current_user())
 
 
-@bp.route('/terminal')
-@login_required
-def terminal():
-    """在线终端页面"""
-    return render_template('terminal.html', current_user=get_current_user())
-
-
 @bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
