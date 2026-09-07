@@ -64,6 +64,7 @@ def login():
             code = request.form.get('code', '')
             if verify_2fa(code):
                 session['logged_in'] = True
+                session.permanent = True
                 session.pop('pre_auth', None)
                 return redirect(next_url)
             else:
