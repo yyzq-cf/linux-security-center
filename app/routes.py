@@ -409,16 +409,79 @@ def unblock_ip():
 @bp.route('/api/banned-ips')
 @login_required
 def banned_ips():
-    """获取当前已被 fail2ban 封禁的IP列表"""
+    """获取当前已被 fail2ban 封禁的IP列表（含封禁时间和持续时间）"""
+    import subprocess, re
+    from datetime import datetime, timedelta
+
     jail = request.args.get('jail', 'sshd')
+
+    # 1. 获取当前封禁IP列表
     r = _fail2ban_cmd(['status', jail])
     if r.returncode != 0:
         return jsonify({'ok': False, 'banned': [], 'msg': 'fail2ban未运行'})
-    # 解析输出
-    banned = []
+
+    banned_ips = []
     for line in r.stdout.splitlines():
         if 'Banned IP list:' in line:
             ips = line.split(':', 1)[1].strip()
-            banned = [ip.strip() for ip in ips.split() if ip.strip()]
+            banned_ips = [ip.strip() for ip in ips.split() if ip.strip()]
             break
-    return jsonify({'ok': True, 'banned': banned})
+
+    # 2. 获取 bantime 配置
+    r2 = _fail2ban_cmd(['get', jail, 'bantime'])
+    bantime = 3600  # 默认1小时
+    if r2.returncode == 0:
+        try:
+            bantime = int(r2.stdout.strip())
+        except ValueError:
+            pass
+
+    # 3. 从 fail2ban 日志解析每个IP最后封禁时间
+    ban_times = {}
+    use_chroot = os.path.isdir('/host/bin')
+    log_prefix = ['chroot', '/host'] if use_chroot else []
+    try:
+        r3 = subprocess.run(
+            log_prefix + ['grep', 'Ban ', '/var/log/fail2ban.log'],
+            capture_output=True, text=True, timeout=5
+        )
+        ban_re = re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+.*Ban (\d+\.\d+\.\d+\.\d+)')
+        for log_line in r3.stdout.splitlines():
+            m = ban_re.search(log_line)
+            if m:
+                ts_str, ip = m.group(1), m.group(2)
+                try:
+                    ban_times[ip] = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+
+    # 4. 构建结果
+    now = datetime.now()
+    result = []
+    for ip in banned_ips:
+        ban_time = ban_times.get(ip)
+        if ban_time:
+            elapsed = int((now - ban_time).total_seconds())
+            remaining = max(bantime - elapsed, 0)
+            result.append({
+                'ip': ip,
+                'ban_time': ban_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'elapsed': elapsed,
+                'remaining': remaining,
+                'bantime': bantime,
+            })
+        else:
+            result.append({
+                'ip': ip,
+                'ban_time': None,
+                'elapsed': None,
+                'remaining': None,
+                'bantime': bantime,
+            })
+
+    # 按封禁时间倒序（最近封的排前面）
+    result.sort(key=lambda x: x.get('elapsed') or 0)
+
+    return jsonify({'ok': True, 'banned': result, 'total': len(result)})

@@ -163,7 +163,7 @@
 
 <!-- 已封禁IP列表 -->
 <div class="card">
-    <div class="card-title">🔒 Fail2Ban 已封禁 IP</div>
+    <div class="card-title">🔒 Fail2Ban 已封禁 IP <span id="banned-count" style="margin-left:8px;font-size:12px;color:var(--text-dim);"></span></div>
     <div id="banned-list-area" style="margin-bottom:12px;">
         <div style="color:var(--text-dim);text-align:center;padding:20px 0;">加载中...</div>
     </div>
@@ -223,19 +223,52 @@ function unblockIp(ip) {
     .catch(e => alert('请求失败: ' + e));
 }
 
+function fmtDuration(secs) {
+    if (secs == null) return '-';
+    secs = Math.max(secs, 0);
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor((secs % 3600) / 60);
+    var s = Math.floor(secs % 60);
+    if (h > 0) return h + '小时' + m + '分';
+    if (m > 0) return m + '分' + s + '秒';
+    return s + '秒';
+}
+
 function loadBanned() {
     fetch('/api/banned-ips')
     .then(r => r.json())
     .then(data => {
         const area = document.getElementById('banned-list-area');
+        const count = document.getElementById('banned-count');
         if (!data.ok || !data.banned || data.banned.length === 0) {
             area.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px 0;">暂无封禁IP</div>';
+            if (count) count.textContent = '';
             return;
         }
-        let html = '<div class="table-wrap"><table><thead><tr><th>#</th><th>IP地址</th><th>操作</th></tr></thead><tbody>';
-        data.banned.forEach(function(ip, i) {
-            html += '<tr><td>' + (i+1) + '</td><td class="mono">' + ip + '</td>'
-                  + '<td><button class="btn" onclick="unblockIp(\''+ ip +'\')" style="border-color:var(--green);color:var(--green)">🟢 解封</button></td></tr>';
+        if (count) count.textContent = '(' + data.total + '个)';
+        var html = '<div class="table-wrap"><table><thead><tr><th>#</th><th>IP地址</th><th>封禁时间</th><th>已封禁</th><th>自动解封</th><th>操作</th></tr></thead><tbody>';
+        data.banned.forEach(function(item, i) {
+            var ip = item.ip;
+            var banTime = item.ban_time || '-';
+            var elapsed = fmtDuration(item.elapsed);
+            var remaining;
+            if (item.remaining != null) {
+                var pct = item.bantime > 0 ? Math.min((item.elapsed / item.bantime) * 100, 100) : 0;
+                remaining = '<div style="display:flex;align-items:center;gap:6px;">'
+                    + '<div class="progress" style="flex:1;margin:0;min-width:50px;">'
+                    + '<div class="progress-bar ' + (pct > 80 ? 'green' : pct > 50 ? 'yellow' : 'red') + '" style="width:' + pct.toFixed(0) + '%"></div>'
+                    + '</div><span style="font-size:11px;white-space:nowrap;">' + fmtDuration(item.remaining) + '</span></div>';
+            } else {
+                remaining = '<span style="font-size:11px;color:var(--text-dim);">-</span>';
+            }
+            html += '<tr>'
+                + '<td>' + (i+1) + '</td>'
+                + '<td class="mono">' + ip + '</td>'
+                + '<td style="font-size:12px;color:var(--text-dim);white-space:nowrap;">' + banTime + '</td>'
+                + '<td style="font-size:12px;">' + elapsed + '</td>'
+                + '<td>' + remaining + '</td>'
+                + '<td><button class="btn" onclick="unblockIp(\''+ ip +'\')" style="border-color:var(--green);color:var(--green)">🟢 解封</button></td>'
+                + '</tr>';
         });
         html += '</tbody></table></div>';
         area.innerHTML = html;
@@ -247,5 +280,7 @@ function loadBanned() {
 
 // 页面加载时获取已封禁列表
 loadBanned();
+// 每30秒自动刷新
+setInterval(loadBanned, 30000);
 </script>
 {% endblock %}
