@@ -100,25 +100,68 @@
             {% endif %}
         </div>
         {% endfor %}
-        <div class="info-row">
-            <span class="key">CPU</span>
-            <span class="val">{{ sysinfo.cpu_percent|default(0)|round(1) }}% ({{ sysinfo.cpu_cores|default('?') }}核)</span>
+    </div>
+</div>
+
+<!-- 资源监控仪表盘 -->
+<div class="card">
+    <div class="card-title">📡 系统资源监控 <span style="font-size:11px;color:var(--text-dim);margin-left:8px;" id="stats-updated">实时</span></div>
+    <div class="grid grid-4" style="margin-bottom:0;">
+        <div class="gauge-item">
+            <div class="gauge-wrap">
+                <svg class="gauge" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+                    <circle id="gauge-cpu" cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="8"
+                        stroke-dasharray="0 327" stroke-linecap="round" style="transition:stroke-dasharray .6s ease, stroke .3s;transform:rotate(-90deg);transform-origin:60px 60px;"/>
+                </svg>
+                <div class="gauge-text">
+                    <div class="gauge-value" id="cpu-value">0<span style="font-size:14px;">%</span></div>
+                    <div class="gauge-label">CPU</div>
+                </div>
+            </div>
+            <div class="gauge-sub" id="cpu-sub">- 核</div>
         </div>
-        <div class="info-row">
-            <span class="key">内存</span>
-            <span class="val">{{ sysinfo.mem_used|default('?') }}/{{ sysinfo.mem_total|default('?') }} ({{ sysinfo.mem_percent|default(0)|round(1) }}%)</span>
+        <div class="gauge-item">
+            <div class="gauge-wrap">
+                <svg class="gauge" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+                    <circle id="gauge-mem" cx="60" cy="60" r="52" fill="none" stroke="var(--green)" stroke-width="8"
+                        stroke-dasharray="0 327" stroke-linecap="round" style="transition:stroke-dasharray .6s ease, stroke .3s;transform:rotate(-90deg);transform-origin:60px 60px;"/>
+                </svg>
+                <div class="gauge-text">
+                    <div class="gauge-value" id="mem-value">0<span style="font-size:14px;">%</span></div>
+                    <div class="gauge-label">内存</div>
+                </div>
+            </div>
+            <div class="gauge-sub" id="mem-sub">- / - GB</div>
         </div>
-        <div class="progress">
-            <div class="progress-bar {% if (sysinfo.mem_percent or 0) > 80 %}red{% elif (sysinfo.mem_percent or 0) > 60 %}yellow{% else %}green{% endif %}"
-                 style="width:{{ sysinfo.mem_percent|default(0) }}%"></div>
+        <div class="gauge-item">
+            <div class="gauge-wrap">
+                <svg class="gauge" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+                    <circle id="gauge-swap" cx="60" cy="60" r="52" fill="none" stroke="var(--yellow)" stroke-width="8"
+                        stroke-dasharray="0 327" stroke-linecap="round" style="transition:stroke-dasharray .6s ease, stroke .3s;transform:rotate(-90deg);transform-origin:60px 60px;"/>
+                </svg>
+                <div class="gauge-text">
+                    <div class="gauge-value" id="swap-value">0<span style="font-size:14px;">%</span></div>
+                    <div class="gauge-label">Swap</div>
+                </div>
+            </div>
+            <div class="gauge-sub" id="swap-sub">- / - GB</div>
         </div>
-        <div class="info-row" style="margin-top:8px">
-            <span class="key">磁盘</span>
-            <span class="val">{{ sysinfo.disk_percent|default(0)|round(1) }}%</span>
-        </div>
-        <div class="progress">
-            <div class="progress-bar {% if (sysinfo.disk_percent or 0) > 85 %}red{% elif (sysinfo.disk_percent or 0) > 70 %}yellow{% else %}green{% endif %}"
-                 style="width:{{ sysinfo.disk_percent|default(0) }}%"></div>
+        <div class="gauge-item">
+            <div class="gauge-wrap">
+                <svg class="gauge" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+                    <circle id="gauge-disk" cx="60" cy="60" r="52" fill="none" stroke="var(--orange)" stroke-width="8"
+                        stroke-dasharray="0 327" stroke-linecap="round" style="transition:stroke-dasharray .6s ease, stroke .3s;transform:rotate(-90deg);transform-origin:60px 60px;"/>
+                </svg>
+                <div class="gauge-text">
+                    <div class="gauge-value" id="disk-value">0<span style="font-size:14px;">%</span></div>
+                    <div class="gauge-label">磁盘</div>
+                </div>
+            </div>
+            <div class="gauge-sub" id="disk-sub">- / - GB</div>
         </div>
     </div>
 </div>
@@ -195,4 +238,62 @@
     </table>
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<style>
+.gauge-item { text-align:center; }
+.gauge-wrap { position:relative; width:120px; height:120px; margin:0 auto; }
+.gauge { width:120px; height:120px; }
+.gauge-text {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    text-align:center;
+}
+.gauge-value { font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; }
+.gauge-label { font-size:11px; color:var(--text-dim); margin-top:2px; }
+.gauge-sub { font-size:12px; color:var(--text-dim); margin-top:8px; }
+</style>
+<script>
+function updateGauge(id, percent) {
+    var circumference = 327;
+    var dash = (percent / 100) * circumference;
+    var el = document.getElementById('gauge-' + id);
+    var valEl = document.getElementById(id + '-value');
+    if (el) {
+        el.setAttribute('stroke-dasharray', dash + ' ' + circumference);
+        var color = percent > 85 ? 'var(--red)' : percent > 65 ? 'var(--yellow)' : 'var(--green)';
+        if (id === 'cpu') color = percent > 80 ? 'var(--red)' : percent > 60 ? 'var(--yellow)' : 'var(--accent)';
+        if (id === 'mem') color = percent > 80 ? 'var(--red)' : percent > 60 ? 'var(--yellow)' : 'var(--green)';
+        if (id === 'swap') color = percent > 80 ? 'var(--red)' : percent > 50 ? 'var(--yellow)' : 'var(--green)';
+        if (id === 'disk') color = percent > 85 ? 'var(--red)' : percent > 70 ? 'var(--yellow)' : 'var(--orange)';
+        el.style.stroke = color;
+    }
+    if (valEl) {
+        valEl.innerHTML = Math.round(percent) + '<span style="font-size:14px;">%</span>';
+    }
+}
+
+function fetchStats() {
+    fetch('/api/system-stats')
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) return;
+        updateGauge('cpu', data.cpu_percent);
+        document.getElementById('cpu-sub').textContent = data.cpu_cores + ' 核';
+        updateGauge('mem', data.mem_percent);
+        document.getElementById('mem-sub').textContent = data.mem_used + ' / ' + data.mem_total + ' GB';
+        updateGauge('swap', data.swap_percent);
+        document.getElementById('swap-sub').textContent = data.swap_used + ' / ' + data.swap_total + ' GB';
+        updateGauge('disk', data.disk_percent);
+        document.getElementById('disk-sub').textContent = data.disk_used + ' / ' + data.disk_total + ' GB';
+        var now = new Date();
+        document.getElementById('stats-updated').textContent = '更新于 ' + now.toLocaleTimeString('zh-CN');
+    })
+    .catch(e => {
+        document.getElementById('stats-updated').textContent = '获取失败';
+    });
+}
+
+fetchStats();
+setInterval(fetchStats, 3000);
+</script>
 {% endblock %}

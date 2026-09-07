@@ -356,16 +356,26 @@ def check_system_info():
     except Exception:
         pass
 
-    # CPU/内存
+    # CPU/内存/磁盘/Swap
     try:
         import psutil
         info['cpu_percent'] = psutil.cpu_percent(interval=1)
-        mem = psutil.virtual_memory()
-        info['mem_total'] = f'{mem.total // (1024**3)}GB'
-        info['mem_used'] = f'{mem.used // (1024**3)}GB'
-        info['mem_percent'] = mem.percent
-        info['disk_percent'] = psutil.disk_usage('/').percent
         info['cpu_cores'] = psutil.cpu_count()
+        # 内存
+        mem = psutil.virtual_memory()
+        info['mem_percent'] = round(mem.percent, 1)
+        info['mem_total_gb'] = round(mem.total / (1024**3), 1)
+        info['mem_used_gb'] = round(mem.used / (1024**3), 1)
+        # Swap
+        swap = psutil.swap_memory()
+        info['swap_percent'] = round(swap.percent, 1)
+        info['swap_total_gb'] = round(swap.total / (1024**3), 1)
+        info['swap_used_gb'] = round(swap.used / (1024**3), 1)
+        # 磁盘
+        disk = psutil.disk_usage('/')
+        info['disk_percent'] = round(disk.percent, 1)
+        info['disk_total_gb'] = round(disk.total / (1024**3), 1)
+        info['disk_used_gb'] = round(disk.used / (1024**3), 1)
     except Exception:
         pass
 

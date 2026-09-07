@@ -237,6 +237,32 @@ def settings():
 
 # ===== API =====
 
+@bp.route('/api/system-stats')
+@login_required
+def system_stats():
+    """实时系统资源数据 (CPU/内存/Swap/磁盘)"""
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        disk = psutil.disk_usage('/')
+        return jsonify({
+            'cpu_percent': round(psutil.cpu_percent(interval=0.5), 1),
+            'cpu_cores': psutil.cpu_count(),
+            'mem_percent': round(mem.percent, 1),
+            'mem_total': round(mem.total / (1024**3), 1),
+            'mem_used': round(mem.used / (1024**3), 1),
+            'swap_percent': round(swap.percent, 1),
+            'swap_total': round(swap.total / (1024**3), 1),
+            'swap_used': round(swap.used / (1024**3), 1),
+            'disk_percent': round(disk.percent, 1),
+            'disk_total': round(disk.total / (1024**3), 1),
+            'disk_used': round(disk.used / (1024**3), 1),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/api/brute-force')
 @login_required
 def api_brute_force():
