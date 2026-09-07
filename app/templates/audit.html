@@ -94,16 +94,19 @@
             <span class="key">状态</span>
             <span class="badge warn">已安装未运行</span>
         </div>
-        <div style="margin-top:12px;color:var(--yellow);font-size:13px">
-            建议: systemctl start fail2ban
+        <div style="margin-top:16px">
+            <button class="btn-install" onclick="startFail2ban()" style="width:100%;padding:10px;border:none;border-radius:8px;background:var(--accent);color:var(--bg);font-size:14px;font-weight:600;cursor:pointer;">▶ 启动 Fail2Ban</button>
         </div>
         {% else %}
         <div class="info-row">
             <span class="key">状态</span>
             <span class="badge fail pulse">未安装</span>
         </div>
-        <div style="margin-top:12px;color:var(--yellow);font-size:13px">
-            建议: apt install fail2ban -y
+        <div id="f2b-install-area" style="margin-top:16px">
+            <button id="f2b-install-btn" onclick="installFail2ban()" style="width:100%;padding:12px;border:none;border-radius:8px;background:var(--green);color:var(--bg);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;">
+                📦 一键安装 Fail2Ban
+            </button>
+            <div id="f2b-status" style="margin-top:12px;display:none;text-align:center;font-size:13px;padding:10px;border-radius:8px;"></div>
         </div>
         {% endif %}
     </div>
@@ -240,4 +243,72 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function installFail2ban() {
+    const btn = document.getElementById('f2b-install-btn');
+    const status = document.getElementById('f2b-status');
+    if (!btn) return;
+    if (!confirm('确认在线安装 Fail2Ban？\n将通过 apt/yum 自动安装并配置 sshd 防护')) return;
+
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.textContent = '⏳ 安装中...';
+
+    status.style.display = 'block';
+    status.style.background = 'rgba(0,212,255,.1)';
+    status.style.color = 'var(--accent)';
+    status.innerHTML = '⏳ 正在安装，请稍候（可能需要30-60秒）...';
+
+    fetch('/api/install-fail2ban', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            btn.style.background = 'var(--green)';
+            btn.textContent = '✅ 安装成功';
+            status.style.background = 'rgba(0,230,118,.1)';
+            status.style.color = 'var(--green)';
+            status.innerHTML = '✅ ' + data.msg + '<br><span style="font-size:12px;opacity:.7">页面将在2秒后刷新...</span>';
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.background = 'var(--red)';
+            btn.style.color = '#fff';
+            btn.textContent = '❌ 安装失败，点击重试';
+            status.style.background = 'rgba(255,61,78,.1)';
+            status.style.color = 'var(--red)';
+            status.innerHTML = '❌ ' + data.msg;
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = '📦 一键安装 Fail2Ban';
+        status.style.background = 'rgba(255,61,78,.1)';
+        status.style.color = 'var(--red)';
+        status.innerHTML = '❌ 请求失败: ' + e;
+    });
+}
+
+function startFail2ban() {
+    fetch('/api/start-fail2ban', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alert(data.msg);
+        if (data.ok) location.reload();
+    })
+    .catch(e => alert('请求失败: ' + e));
+}
+</script>
 {% endblock %}

@@ -1,5 +1,7 @@
 bind = '0.0.0.0:8888'
-workers = 2
-timeout = 60
+worker_class = 'gthread'
+workers = 1
+threads = 4
+timeout = 0
 accesslog = '-'
 errorlog = '-'

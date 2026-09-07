@@ -392,6 +392,7 @@
             <a href="{{ url_for('main.index') }}" class="{% if request.endpoint == 'main.index' %}active{% endif %}">仪表盘</a>
             <a href="{{ url_for('main.brute_force') }}" class="{% if request.endpoint == 'main.brute_force' %}active{% endif %}">暴力破解</a>
             <a href="{{ url_for('main.security_audit') }}" class="{% if request.endpoint == 'main.security_audit' %}active{% endif %}">安全审计</a>
+            <a href="{{ url_for('main.terminal') }}" class="{% if request.endpoint == 'main.terminal' %}active{% endif %}">终端</a>
 
             <!-- 主题切换 -->
             <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" title="切换明暗主题">🌙</button>

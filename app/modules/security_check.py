@@ -373,21 +373,30 @@ def check_system_info():
 
 
 def check_fail2ban():
-    """检查 fail2ban 状态"""
+    """检查 fail2ban 状态（通过 chroot 检测宿主机）"""
+    use_chroot = os.path.isdir('/host/bin')
+    prefix = ['chroot', '/host'] if use_chroot else []
     result = {'installed': False, 'active': False, 'jails': []}
     try:
-        r = subprocess.run(['fail2ban-client', 'status'], capture_output=True,
-                           text=True, timeout=5)
-        if r.returncode == 0:
-            result['installed'] = True
+        # 检测是否安装
+        r = subprocess.run(prefix + ['which', 'fail2ban-client'],
+                           capture_output=True, timeout=5)
+        if r.returncode != 0:
+            return result
+        result['installed'] = True
+        # 检测服务状态
+        r = subprocess.run(prefix + ['systemctl', 'is-active', 'fail2ban'],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and 'active' in r.stdout:
             result['active'] = True
-            # 解析 jail 列表
-            for line in r.stdout.splitlines():
-                if 'Jail list:' in line:
-                    jails = line.split(':', 1)[1].strip().rstrip('.')
-                    result['jails'] = [j.strip() for j in jails.split(',') if j.strip()]
-    except FileNotFoundError:
-        pass
+            # 获取 jail 列表
+            r = subprocess.run(prefix + ['fail2ban-client', 'status'],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                for line in r.stdout.splitlines():
+                    if 'Jail list:' in line:
+                        jails = line.split(':', 1)[1].strip().rstrip('.')
+                        result['jails'] = [j.strip() for j in jails.split(',') if j.strip()]
     except Exception:
         pass
     return result

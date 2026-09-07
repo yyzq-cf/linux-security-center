@@ -17,6 +17,8 @@ services:
       - /etc/hostname:/etc/hostname:ro
       - /etc/os-release:/etc/os-release:ro
       - /etc/localtime:/etc/localtime:ro
+      # 宿主机根文件系统（终端+fail2ban需要chroot）
+      - /:/host
     network_mode: host
     cap_add:
       - NET_ADMIN

@@ -3,6 +3,7 @@ from flask import (
     Blueprint, render_template, jsonify, request,
     redirect, url_for, session, flash
 )
+from pathlib import Path
 
 from .modules.brute_force import analyze_brute_force, get_lastb_data
 from .modules.security_check import (
@@ -171,6 +172,13 @@ def security_audit():
                            score=score, counts=counts, current_user=get_current_user())
 
 
+@bp.route('/terminal')
+@login_required
+def terminal():
+    """在线终端页面"""
+    return render_template('terminal.html', current_user=get_current_user())
+
+
 @bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
@@ -255,6 +263,110 @@ def api_security_audit():
         'fail2ban': check_fail2ban(),
         'system_info': check_system_info(),
     })
+
+
+@bp.route('/api/start-fail2ban', methods=['POST'])
+@login_required
+def start_fail2ban():
+    """启动已安装但未运行的 Fail2Ban"""
+    import subprocess
+    try:
+        subprocess.run(['chroot', '/host', 'systemctl', 'enable', 'fail2ban'],
+                       capture_output=True, timeout=10)
+        r = subprocess.run(['chroot', '/host', 'systemctl', 'start', 'fail2ban'],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return jsonify({'ok': False, 'msg': f'启动失败: {r.stderr[:200]}'})
+        return jsonify({'ok': True, 'msg': 'Fail2Ban 已启动并设置开机自启'})
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': str(e)})
+
+
+@bp.route('/api/install-fail2ban', methods=['POST'])
+@login_required
+def install_fail2ban():
+    """在线安装 Fail2Ban（通过 chroot 在宿主机执行）"""
+    import subprocess, os
+    HOST = '/host'
+    env = {**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'}
+    try:
+        # 检测包管理器（在宿主机上）
+        r = subprocess.run(['chroot', HOST, 'which', 'apt-get'],
+                           capture_output=True, timeout=5)
+        if r.returncode == 0:
+            pkg_mgr = 'apt'
+            cmds = [
+                ['chroot', HOST, 'apt-get', 'update', '-y'],
+                ['chroot', HOST, 'apt-get', 'install', '-y', 'fail2ban'],
+            ]
+        else:
+            r = subprocess.run(['chroot', HOST, 'which', 'yum'],
+                               capture_output=True, timeout=5)
+            if r.returncode == 0:
+                pkg_mgr = 'yum'
+                cmds = [
+                    ['chroot', HOST, 'yum', 'install', '-y', 'epel-release'],
+                    ['chroot', HOST, 'yum', 'install', '-y', 'fail2ban'],
+                ]
+            else:
+                r = subprocess.run(['chroot', HOST, 'which', 'dnf'],
+                                   capture_output=True, timeout=5)
+                if r.returncode == 0:
+                    pkg_mgr = 'dnf'
+                    cmds = [
+                        ['chroot', HOST, 'dnf', 'install', '-y', 'epel-release'],
+                        ['chroot', HOST, 'dnf', 'install', '-y', 'fail2ban'],
+                    ]
+                else:
+                    return jsonify({'ok': False, 'msg': '不支持的系统：未找到 apt/yum/dnf'})
+
+        # 依次执行安装命令
+        for cmd in cmds:
+            r = subprocess.run(cmd, capture_output=True, text=True,
+                               timeout=180, env=env)
+            if r.returncode != 0:
+                return jsonify({
+                    'ok': False,
+                    'msg': f'{pkg_mgr} 执行失败: {(r.stderr or r.stdout)[:300]}'
+                })
+
+        # 启动并设置开机自启
+        subprocess.run(['chroot', HOST, 'systemctl', 'enable', 'fail2ban'],
+                       capture_output=True, timeout=10)
+        subprocess.run(['chroot', HOST, 'systemctl', 'start', 'fail2ban'],
+                       capture_output=True, timeout=10)
+
+        # 写入默认 sshd jail 配置
+        jail_conf = (
+            '[sshd]\n'
+            'enabled = true\n'
+            'port = ssh\n'
+            'filter = sshd\n'
+            'logpath = /var/log/auth.log\n'
+            'maxretry = 5\n'
+            'bantime = 3600\n'
+        )
+        jail_path = '/etc/fail2ban/jail.d/sshd.local'
+        try:
+            subprocess.run(['chroot', HOST, 'mkdir', '-p', '/etc/fail2ban/jail.d'],
+                           capture_output=True, timeout=10)
+            subprocess.run(
+                ['chroot', HOST, 'bash', '-c', 'cat > ' + jail_path],
+                input=jail_conf, capture_output=True, text=True, timeout=10
+            )
+            subprocess.run(['chroot', HOST, 'systemctl', 'restart', 'fail2ban'],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
+
+        return jsonify({
+            'ok': True,
+            'msg': 'Fail2Ban 安装成功！已配置 sshd 防护（5次失败封禁1小时）'
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'msg': '安装超时，请稍后重试'})
+    except Exception as e:
+        return jsonify({'ok': False, 'msg': f'安装失败: {str(e)}'})
 
 
 @bp.route('/api/block-ip', methods=['POST'])

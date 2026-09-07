@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}终端 · Linux 安全中心{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>🖥️ 在线终端</h1>
+    <div class="subtitle">直接在浏览器中执行宿主机命令 · ⚠️ 请谨慎操作</div>
+</div>
+
+<!-- 终端容器 -->
+<div class="card" style="padding:0;overflow:hidden;">
+    <div id="terminal-container" style="height:calc(100vh - 220px);min-height:400px;background:#0a0e17;"></div>
+</div>
+
+<!-- 状态栏 -->
+<div id="term-status" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--text-dim);">
+    <span id="term-status-icon" style="font-size:16px;">🟡</span>
+    <span id="term-status-text">连接中...</span>
+    <span style="margin-left:auto;">
+        <button id="term-reconnect" class="btn" style="display:none;padding:4px 12px;font-size:12px;">重新连接</button>
+    </span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script>
+(function() {
+    const container = document.getElementById('terminal-container');
+    const statusIcon = document.getElementById('term-status-icon');
+    const statusText = document.getElementById('term-status-text');
+    const reconnectBtn = document.getElementById('term-reconnect');
+
+    let term = null;
+    let ws = null;
+
+    // 手动计算rows/cols (替代FitAddon)
+    function getTerminalSize() {
+        // xterm默认字符尺寸大约: 宽7px 高16px (14px字体)
+        const charWidth = 7.2;
+        const charHeight = 16;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        let cols = Math.floor(w / charWidth);
+        let rows = Math.floor(h / charHeight);
+        cols = Math.max(cols, 10);
+        rows = Math.max(rows, 5);
+        return { cols, rows };
+    }
+
+    function sendResize() {
+        if (ws && ws.readyState === WebSocket.OPEN && term) {
+            const size = getTerminalSize();
+            ws.send(JSON.stringify({type: 'resize', cols: size.cols, rows: size.rows}));
+        }
+    }
+
+    function initTerminal() {
+        const size = getTerminalSize();
+
+        term = new Terminal({
+            cols: size.cols,
+            rows: size.rows,
+            fontSize: 14,
+            fontFamily: "'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace",
+            theme: {
+                background: '#0a0e17',
+                foreground: '#e0e6ed',
+                cursor: '#00d4ff',
+                cursorAccent: '#0a0e17',
+                selection: 'rgba(0,212,255,0.2)',
+                black: '#0a0e17',
+                red: '#ff3d4e',
+                green: '#00e676',
+                yellow: '#ffab00',
+                blue: '#00d4ff',
+                magenta: '#ff6d00',
+                cyan: '#00bcd4',
+                white: '#e0e6ed',
+                brightBlack: '#6b7a8f',
+                brightRed: '#ff6b6b',
+                brightGreen: '#69f0ae',
+                brightYellow: '#ffd54f',
+                brightBlue: '#40c4ff',
+                brightMagenta: '#ff9100',
+                brightCyan: '#18ffff',
+                brightWhite: '#ffffff'
+            },
+            cursorBlink: true,
+            scrollback: 5000,
+            allowProposedApi: true,
+        });
+
+        term.open(container);
+
+        // 终端输入 → WebSocket
+        term.onData(function(data) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'input', data: data}));
+            }
+        });
+
+        // 窗口大小变化 → 重新计算并通知服务端
+        let resizeTimer = null;
+        window.addEventListener('resize', function() {
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function() {
+                const newSize = getTerminalSize();
+                if (term) {
+                    term.resize(newSize.cols, newSize.rows);
+                    sendResize();
+                }
+            }, 200);
+        });
+
+        // 连接 WebSocket
+        connectWS();
+    }
+
+    function connectWS() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = proto + '//' + location.host + '/ws/terminal';
+
+        try {
+            ws = new WebSocket(wsUrl);
+        } catch(e) {
+            statusIcon.textContent = '🔴';
+            statusText.textContent = '连接失败: ' + e.message;
+            reconnectBtn.style.display = '';
+            return;
+        }
+
+        ws.onopen = function() {
+            statusIcon.textContent = '🟢';
+            statusText.textContent = '已连接';
+            reconnectBtn.style.display = 'none';
+            // 发送初始窗口大小
+            const size = getTerminalSize();
+            ws.send(JSON.stringify({
+                type: 'resize',
+                cols: size.cols,
+                rows: size.rows
+            }));
+            if (term) term.focus();
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'output' || msg.type === 'error' || msg.type === 'exit') {
+                    term.write(msg.data);
+                }
+            } catch(e) {
+                // 非JSON，直接写入
+                if (term) term.write(event.data);
+            }
+        };
+
+        ws.onclose = function() {
+            statusIcon.textContent = '🔴';
+            statusText.textContent = '连接已断开';
+            reconnectBtn.style.display = '';
+        };
+
+        ws.onerror = function() {
+            statusIcon.textContent = '🔴';
+            statusText.textContent = '连接错误';
+        };
+    }
+
+    reconnectBtn.addEventListener('click', function() {
+        if (term) {
+            term.write('\r\n\x1b[33m[重新连接中...]\x1b[0m\r\n');
+        }
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+        statusIcon.textContent = '🟡';
+        statusText.textContent = '连接中...';
+        setTimeout(connectWS, 500);
+    });
+
+    // 启动
+    initTerminal();
+})();
+</script>
+{% endblock %}
