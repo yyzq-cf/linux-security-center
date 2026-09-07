@@ -338,7 +338,15 @@ def install_fail2ban():
             'filter = sshd\n'
             'logpath = /var/log/auth.log\n'
             'maxretry = 5\n'
-            'bantime = 3600\n'
+            'bantime = 2592000\n'
+            '\n'
+            '[recidive]\n'
+            'enabled = true\n'
+            'logpath = /var/log/fail2ban.log\n'
+            'banaction = iptables-allports\n'
+            'bantime = -1\n'
+            'findtime = 2592000\n'
+            'maxretry = 2\n'
         )
         jail_path = '/etc/fail2ban/jail.d/sshd.local'
         try:
