@@ -15,6 +15,29 @@
     <a href="?days=30" class="{% if days==30 %}active{% endif %}">最近30天</a>
 </div>
 
+<!-- 分页控制条 -->
+<div class="filter-bar" style="justify-content:space-between;">
+    <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:13px;color:var(--text-dim);">每页</span>
+        <a href="?days={{ days }}&page=1&per_page=10" class="{% if pagination.per_page==10 %}active{% endif %}" style="padding:4px 12px;">10</a>
+        <a href="?days={{ days }}&page=1&per_page=20" class="{% if pagination.per_page==20 %}active{% endif %}" style="padding:4px 12px;">20</a>
+        <a href="?days={{ days }}&page=1&per_page=50" class="{% if pagination.per_page==50 %}active{% endif %}" style="padding:4px 12px;">50</a>
+    </div>
+    <div style="display:flex;gap:4px;align-items:center;">
+        {% if pagination.has_prev %}
+        <a href="?days={{ days }}&page={{ pagination.prev_page }}&per_page={{ pagination.per_page }}" class="filter-bar" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">← 上一页</a>
+        {% else %}
+        <span style="padding:4px 12px;color:var(--text-dim);font-size:13px;opacity:.5;">← 上一页</span>
+        {% endif %}
+        <span style="font-size:13px;color:var(--text-dim);padding:0 8px;">第 {{ pagination.page }} / {{ pagination.total_pages }} 页</span>
+        {% if pagination.has_next %}
+        <a href="?days={{ days }}&page={{ pagination.next_page }}&per_page={{ pagination.per_page }}" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">下一页 →</a>
+        {% else %}
+        <span style="padding:4px 12px;color:var(--text-dim);font-size:13px;opacity:.5;">下一页 →</span>
+        {% endif %}
+    </div>
+</div>
+
 <!-- 统计 -->
 <div class="grid grid-4" style="margin-bottom:20px">
     <div class="card stat">
@@ -70,7 +93,7 @@
             <tbody>
                 {% for ip in data.top_ips %}
                 <tr>
-                    <td>{{ loop.index }}</td>
+                    <td>{{ pagination.range_start + loop.index0 }}</td>
                     <td class="mono">{{ ip.ip }}</td>
                     <td><strong>{{ ip.count }}</strong></td>
                     <td style="font-size:12px">{{ ip.users }}</td>
@@ -96,7 +119,7 @@
             <tbody>
                 {% for u in data.top_users %}
                 <tr>
-                    <td>{{ loop.index }}</td>
+                    <td>{{ pagination.range_start + loop.index0 }}</td>
                     <td class="mono">{{ u.user }}</td>
                     <td><strong>{{ u.count }}</strong></td>
                     <td>
@@ -160,6 +183,18 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
+    <!-- 事件分页 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <span style="font-size:12px;color:var(--text-dim);">第 {{ pagination.page }} 页 · 每页 {{ pagination.per_page }} 条</span>
+        <div style="display:flex;gap:4px;">
+            {% if pagination.has_prev %}
+            <a href="?days={{ days }}&page={{ pagination.prev_page }}&per_page={{ pagination.per_page }}" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">← 上一页</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a href="?days={{ days }}&page={{ pagination.next_page }}&per_page={{ pagination.per_page }}" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">下一页 →</a>
+            {% endif %}
+        </div>
     </div>
 </div>
 

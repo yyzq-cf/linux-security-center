@@ -118,13 +118,56 @@ def index():
 @bp.route('/brute-force')
 @login_required
 def brute_force():
-    """暴力破解详情页"""
+    """暴力破解详情页（分页）"""
+    import math
     days = int(request.args.get('days', 7))
     days = min(max(days, 1), 30)
-    data = analyze_brute_force(days=days, top=50)
+    page = max(int(request.args.get('page', 1)), 1)
+    per_page = int(request.args.get('per_page', 20))
+    if per_page not in (10, 20, 50):
+        per_page = 20
+
+    # 获取全量数据
+    data = analyze_brute_force(days=days, top=9999)
     lastb = get_lastb_data(top=50)
+
+    # 对 top_ips 分页
+    all_ips = data.get('top_ips', [])
+    total_ips = len(all_ips)
+    total_pages = max(math.ceil(total_ips / per_page), 1)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_ips = all_ips[start:end]
+
+    # 对 top_users 分页
+    all_users = data.get('top_users', [])
+    total_users = len(all_users)
+    user_pages = max(math.ceil(total_users / per_page), 1)
+    page_users = all_users[start:end]
+
+    # 对 recent_events 分页
+    all_events = data.get('recent_events', [])
+    total_events = len(all_events)
+    event_pages = max(math.ceil(total_events / per_page), 1)
+    page_events = all_events[start:end]
+
+    pagination = {
+        'page': page, 'per_page': per_page, 'total_pages': total_pages,
+        'total_ips': total_ips, 'total_users': total_users, 'total_events': total_events,
+        'has_prev': page > 1, 'has_next': page < total_pages,
+        'prev_page': page - 1, 'next_page': page + 1,
+        'range_start': start + 1 if total_ips > 0 else 0,
+        'range_end': min(end, total_ips),
+    }
+
+    data['top_ips'] = page_ips
+    data['top_users'] = page_users
+    data['recent_events'] = page_events
+
     return render_template('brute_force.html', data=data, lastb=lastb,
-                           days=days, current_user=get_current_user())
+                           days=days, pagination=pagination,
+                           current_user=get_current_user())
 
 
 @bp.route('/security-audit')
