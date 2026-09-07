@@ -4,6 +4,7 @@ from flask import (
     redirect, url_for, session, flash
 )
 from pathlib import Path
+import os
 
 from .modules.brute_force import analyze_brute_force, get_lastb_data
 from .modules.security_check import (
@@ -362,21 +363,62 @@ def install_fail2ban():
         return jsonify({'ok': False, 'msg': f'安装失败: {str(e)}'})
 
 
+def _fail2ban_cmd(args):
+    """通过 chroot 执行 fail2ban-client 命令"""
+    import subprocess
+    use_chroot = os.path.isdir('/host/bin')
+    prefix = ['chroot', '/host'] if use_chroot else []
+    r = subprocess.run(prefix + ['fail2ban-client'] + args,
+                       capture_output=True, text=True, timeout=10)
+    return r
+
+
 @bp.route('/api/block-ip', methods=['POST'])
 @login_required
 def block_ip():
-    import subprocess
+    """通过 fail2ban 封禁IP"""
     ip = request.json.get('ip', '').strip()
     if not ip:
         return jsonify({'ok': False, 'msg': 'IP不能为空'})
-
     parts = ip.split('.')
     if len(parts) != 4 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
         return jsonify({'ok': False, 'msg': 'IP格式错误'})
 
-    try:
-        subprocess.run(['iptables', '-I', 'INPUT', '-s', ip, '-j', 'DROP'],
-                       capture_output=True, timeout=5)
-        return jsonify({'ok': True, 'msg': f'已封禁 {ip}'})
-    except Exception as e:
-        return jsonify({'ok': False, 'msg': str(e)})
+    jail = request.json.get('jail', 'sshd')
+    r = _fail2ban_cmd(['set', jail, 'banip', ip])
+    if r.returncode == 0:
+        return jsonify({'ok': True, 'msg': f'已通过 fail2ban 封禁 {ip}'})
+    return jsonify({'ok': False, 'msg': f'封禁失败: {r.stderr.strip()[:200]}'})
+
+
+@bp.route('/api/unblock-ip', methods=['POST'])
+@login_required
+def unblock_ip():
+    """通过 fail2ban 解封IP"""
+    ip = request.json.get('ip', '').strip()
+    if not ip:
+        return jsonify({'ok': False, 'msg': 'IP不能为空'})
+
+    jail = request.json.get('jail', 'sshd')
+    r = _fail2ban_cmd(['set', jail, 'unbanip', ip])
+    if r.returncode == 0:
+        return jsonify({'ok': True, 'msg': f'已解封 {ip}'})
+    return jsonify({'ok': False, 'msg': f'解封失败: {r.stderr.strip()[:200]}'})
+
+
+@bp.route('/api/banned-ips')
+@login_required
+def banned_ips():
+    """获取当前已被 fail2ban 封禁的IP列表"""
+    jail = request.args.get('jail', 'sshd')
+    r = _fail2ban_cmd(['status', jail])
+    if r.returncode != 0:
+        return jsonify({'ok': False, 'banned': [], 'msg': 'fail2ban未运行'})
+    # 解析输出
+    banned = []
+    for line in r.stdout.splitlines():
+        if 'Banned IP list:' in line:
+            ips = line.split(':', 1)[1].strip()
+            banned = [ip.strip() for ip in ips.split() if ip.strip()]
+            break
+    return jsonify({'ok': True, 'banned': banned})

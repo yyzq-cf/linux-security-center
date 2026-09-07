@@ -72,7 +72,7 @@
                     <td><strong>{{ ip.count }}</strong></td>
                     <td style="font-size:12px">{{ ip.users }}</td>
                     <td><span class="badge {{ ip.danger }}">{{ ip.danger }}</span></td>
-                    <td><button class="btn" onclick="blockIp('{{ ip.ip }}')">封禁</button></td>
+                    <td><button class="btn" onclick="blockIp('{{ ip.ip }}')" style="border-color:var(--red);color:var(--red)">🔴 封禁</button></td>
                 </tr>
                 {% else %}
                 <tr><td colspan="6" style="text-align:center;color:var(--text-dim)">无数据</td></tr>
@@ -160,6 +160,15 @@
     </div>
 </div>
 
+
+<!-- 已封禁IP列表 -->
+<div class="card">
+    <div class="card-title">🔒 Fail2Ban 已封禁 IP</div>
+    <div id="banned-list-area" style="margin-bottom:12px;">
+        <div style="color:var(--text-dim);text-align:center;padding:20px 0;">加载中...</div>
+    </div>
+</div>
+
 {% if lastb %}
 <div class="card">
     <div class="card-title">📝 lastb 登录失败记录</div>
@@ -185,7 +194,7 @@
 {% block scripts %}
 <script>
 function blockIp(ip) {
-    if (!confirm('确认通过 iptables 封禁 IP: ' + ip + ' ?')) return;
+    if (!confirm('确认通过 fail2ban 封禁 IP: ' + ip + ' ?')) return;
     fetch('/api/block-ip', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -194,9 +203,49 @@ function blockIp(ip) {
     .then(r => r.json())
     .then(data => {
         alert(data.msg || (data.ok ? '封禁成功' : '封禁失败'));
-        if (data.ok) location.reload();
+        if (data.ok) loadBanned();
     })
     .catch(e => alert('请求失败: ' + e));
 }
+
+function unblockIp(ip) {
+    if (!confirm('确认解封 IP: ' + ip + ' ?')) return;
+    fetch('/api/unblock-ip', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ip: ip})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alert(data.msg || (data.ok ? '解封成功' : '解封失败'));
+        if (data.ok) loadBanned();
+    })
+    .catch(e => alert('请求失败: ' + e));
+}
+
+function loadBanned() {
+    fetch('/api/banned-ips')
+    .then(r => r.json())
+    .then(data => {
+        const area = document.getElementById('banned-list-area');
+        if (!data.ok || !data.banned || data.banned.length === 0) {
+            area.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px 0;">暂无封禁IP</div>';
+            return;
+        }
+        let html = '<div class="table-wrap"><table><thead><tr><th>#</th><th>IP地址</th><th>操作</th></tr></thead><tbody>';
+        data.banned.forEach(function(ip, i) {
+            html += '<tr><td>' + (i+1) + '</td><td class="mono">' + ip + '</td>'
+                  + '<td><button class="btn" onclick="unblockIp(\''+ ip +'\')" style="border-color:var(--green);color:var(--green)">🟢 解封</button></td></tr>';
+        });
+        html += '</tbody></table></div>';
+        area.innerHTML = html;
+    })
+    .catch(e => {
+        document.getElementById('banned-list-area').innerHTML = '<div style="color:var(--red);text-align:center;padding:20px 0;">加载失败</div>';
+    });
+}
+
+// 页面加载时获取已封禁列表
+loadBanned();
 </script>
 {% endblock %}
