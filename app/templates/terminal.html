@@ -1,23 +1,24 @@
 {% extends "base.html" %}
 {% block title %}终端 · Linux 安全中心{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>🖥️ 在线终端</h1>
-    <div class="subtitle">直接在浏览器中执行宿主机命令 · ⚠️ 请谨慎操作</div>
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div>
+        <h1 style="font-size:22px;">🖥️ 在线终端</h1>
+        <div class="subtitle" style="font-size:13px;">浏览器中执行宿主机命令 · ⚠️ 谨慎操作</div>
+    </div>
+    <button id="term-fullscreen-btn" class="btn" style="padding:6px 14px;font-size:13px;border-radius:8px;border-color:var(--border);">⛶ 全屏</button>
 </div>
 
-<!-- 终端容器 -->
-<div class="card" style="padding:0;overflow:hidden;">
-    <div id="terminal-container" style="height:calc(100vh - 220px);min-height:400px;background:#0a0e17;"></div>
-</div>
-
-<!-- 状态栏 -->
-<div id="term-status" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--text-dim);">
-    <span id="term-status-icon" style="font-size:16px;">🟡</span>
-    <span id="term-status-text">连接中...</span>
-    <span style="margin-left:auto;">
-        <button id="term-reconnect" class="btn" style="display:none;padding:4px 12px;font-size:12px;">重新连接</button>
-    </span>
+<!-- 终端区域：wrapper 控制总高度，container 渲染 xterm，status 固定底部 -->
+<div id="term-wrapper" class="card" style="padding:0;overflow:hidden;position:relative;display:flex;flex-direction:column;">
+    <div id="terminal-container" style="flex:1;min-height:0;overflow:hidden;background:#0a0e17;"></div>
+    <div id="term-status" style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:12px;color:var(--text-dim);background:rgba(10,14,23,0.9);border-top:1px solid var(--border);z-index:10;">
+        <span id="term-status-icon" style="font-size:14px;">🟡</span>
+        <span id="term-status-text">连接中...</span>
+        <span style="margin-left:auto;">
+            <button id="term-reconnect" class="btn" style="display:none;padding:2px 10px;font-size:11px;">重新连接</button>
+        </span>
+    </div>
 </div>
 {% endblock %}
 
@@ -27,25 +28,37 @@
 <script>
 (function() {
     const container = document.getElementById('terminal-container');
+    const wrapper = document.getElementById('term-wrapper');
     const statusIcon = document.getElementById('term-status-icon');
     const statusText = document.getElementById('term-status-text');
     const reconnectBtn = document.getElementById('term-reconnect');
+    const fullscreenBtn = document.getElementById('term-fullscreen-btn');
 
     let term = null;
     let ws = null;
+    let isFullscreen = false;
+    let charWidth = 0;
+    let charHeight = 0;
 
-    // 手动计算rows/cols (替代FitAddon)
+    function measureCharSize() {
+        const testDiv = document.createElement('div');
+        testDiv.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:SF Mono,Cascadia Code,Consolas,Liberation Mono,monospace;font-size:14px;line-height:1;';
+        testDiv.textContent = 'W'.repeat(100) + '\n' + 'W'.repeat(100);
+        document.body.appendChild(testDiv);
+        const rect = testDiv.getBoundingClientRect();
+        document.body.removeChild(testDiv);
+        charWidth = rect.width / 100;
+        charHeight = rect.height / 2;
+        if (!charWidth || !charHeight) { charWidth = 7.2; charHeight = 16; }
+    }
+
     function getTerminalSize() {
-        // xterm默认字符尺寸大约: 宽7px 高16px (14px字体)
-        const charWidth = 7.2;
-        const charHeight = 16;
+        measureCharSize();
         const w = container.clientWidth;
         const h = container.clientHeight;
         let cols = Math.floor(w / charWidth);
         let rows = Math.floor(h / charHeight);
-        cols = Math.max(cols, 10);
-        rows = Math.max(rows, 5);
-        return { cols, rows };
+        return { cols: Math.max(cols, 10), rows: Math.max(rows, 5) };
     }
 
     function sendResize() {
@@ -55,7 +68,38 @@
         }
     }
 
+    function doResize() {
+        if (!term) return;
+        const size = getTerminalSize();
+        try { term.resize(size.cols, size.rows); sendResize(); } catch(e) {}
+        // 同步内部元素高度
+        const h = container.clientHeight;
+        const screen = container.querySelector('.xterm-screen');
+        const viewport = container.querySelector('.xterm-viewport');
+        if (screen) { screen.style.height = h + 'px'; screen.style.overflow = 'hidden'; }
+        if (viewport) { viewport.style.height = h + 'px'; }
+    }
+
+    function setLayout() {
+        if (isFullscreen) {
+            wrapper.style.cssText = 'padding:0;overflow:hidden;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;border:none;border-radius:0;display:flex;flex-direction:column;';
+        } else {
+            const navbar = document.querySelector('.navbar');
+            const header = document.querySelector('.page-header');
+            const footer = document.querySelector('.footer');
+            const navbarH = navbar ? navbar.offsetHeight : 60;
+            const headerH = header ? header.offsetHeight : 60;
+            const footerH = footer ? footer.offsetHeight : 66;
+            const pad = 48;
+            const mb = 12;
+            const availableH = window.innerHeight - navbarH - headerH - footerH - pad - mb;
+            wrapper.style.cssText = 'padding:0;overflow:hidden;position:relative;display:flex;flex-direction:column;height:' + availableH + 'px;';
+        }
+    }
+
     function initTerminal() {
+        setLayout();
+        measureCharSize();
         const size = getTerminalSize();
 
         term = new Terminal({
@@ -64,68 +108,57 @@
             fontSize: 14,
             fontFamily: "'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace",
             theme: {
-                background: '#0a0e17',
-                foreground: '#e0e6ed',
-                cursor: '#00d4ff',
-                cursorAccent: '#0a0e17',
+                background: '#0a0e17', foreground: '#e0e6ed',
+                cursor: '#00d4ff', cursorAccent: '#0a0e17',
                 selection: 'rgba(0,212,255,0.2)',
-                black: '#0a0e17',
-                red: '#ff3d4e',
-                green: '#00e676',
-                yellow: '#ffab00',
-                blue: '#00d4ff',
-                magenta: '#ff6d00',
-                cyan: '#00bcd4',
-                white: '#e0e6ed',
-                brightBlack: '#6b7a8f',
-                brightRed: '#ff6b6b',
-                brightGreen: '#69f0ae',
-                brightYellow: '#ffd54f',
-                brightBlue: '#40c4ff',
-                brightMagenta: '#ff9100',
-                brightCyan: '#18ffff',
-                brightWhite: '#ffffff'
+                black: '#0a0e17', red: '#ff3d4e', green: '#00e676',
+                yellow: '#ffab00', blue: '#00d4ff', magenta: '#ff6d00',
+                cyan: '#00bcd4', white: '#e0e6ed',
+                brightBlack: '#6b7a8f', brightRed: '#ff6b6b', brightGreen: '#69f0ae',
+                brightYellow: '#ffd54f', brightBlue: '#40c4ff', brightMagenta: '#ff9100',
+                brightCyan: '#18ffff', brightWhite: '#ffffff'
             },
-            cursorBlink: true,
-            scrollback: 5000,
-            allowProposedApi: true,
+            cursorBlink: true, scrollback: 5000, allowProposedApi: true,
         });
 
         term.open(container);
 
-        // 终端输入 → WebSocket
+        // 强制 xterm 内部元素跟随容器尺寸
+        function syncXtermHeight() {
+            const h = container.clientHeight;
+            const screen = container.querySelector('.xterm-screen');
+            const viewport = container.querySelector('.xterm-viewport');
+            if (screen) { screen.style.height = h + 'px'; screen.style.overflow = 'hidden'; }
+            if (viewport) { viewport.style.height = h + 'px'; }
+            container.style.overflow = 'hidden';
+        }
+        syncXtermHeight();
+        const observer = new MutationObserver(function() { syncXtermHeight(); });
+        observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style','class'] });
+
         term.onData(function(data) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({type: 'input', data: data}));
             }
         });
 
-        // 窗口大小变化 → 重新计算并通知服务端
         let resizeTimer = null;
         window.addEventListener('resize', function() {
             if (resizeTimer) clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(function() {
-                const newSize = getTerminalSize();
-                if (term) {
-                    term.resize(newSize.cols, newSize.rows);
-                    sendResize();
-                }
-            }, 200);
+            resizeTimer = setTimeout(function() { setLayout(); doResize(); }, 150);
         });
 
-        // 连接 WebSocket
         connectWS();
     }
 
     function connectWS() {
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = proto + '//' + location.host + '/ws/terminal';
-
         try {
             ws = new WebSocket(wsUrl);
         } catch(e) {
             statusIcon.textContent = '🔴';
-            statusText.textContent = '连接失败: ' + e.message;
+            statusText.textContent = '连接失败';
             reconnectBtn.style.display = '';
             return;
         }
@@ -134,13 +167,7 @@
             statusIcon.textContent = '🟢';
             statusText.textContent = '已连接';
             reconnectBtn.style.display = 'none';
-            // 发送初始窗口大小
-            const size = getTerminalSize();
-            ws.send(JSON.stringify({
-                type: 'resize',
-                cols: size.cols,
-                rows: size.rows
-            }));
+            doResize();
             if (term) term.focus();
         };
 
@@ -151,7 +178,6 @@
                     term.write(msg.data);
                 }
             } catch(e) {
-                // 非JSON，直接写入
                 if (term) term.write(event.data);
             }
         };
@@ -169,19 +195,35 @@
     }
 
     reconnectBtn.addEventListener('click', function() {
-        if (term) {
-            term.write('\r\n\x1b[33m[重新连接中...]\x1b[0m\r\n');
-        }
-        if (ws) {
-            ws.close();
-            ws = null;
-        }
+        if (term) term.write('\r\n\x1b[33m[重新连接中...]\x1b[0m\r\n');
+        if (ws) { ws.close(); ws = null; }
         statusIcon.textContent = '🟡';
         statusText.textContent = '连接中...';
         setTimeout(connectWS, 500);
     });
 
-    // 启动
+    fullscreenBtn.addEventListener('click', function() {
+        isFullscreen = !isFullscreen;
+        fullscreenBtn.textContent = isFullscreen ? '⤢ 退出全屏' : '⛶ 全屏';
+        if (isFullscreen) {
+            document.querySelector('.navbar').style.display = 'none';
+            document.querySelector('.container').style.padding = '0';
+            document.querySelector('.footer').style.display = 'none';
+            document.querySelector('.page-header').style.marginBottom = '8px';
+        } else {
+            document.querySelector('.navbar').style.display = '';
+            document.querySelector('.container').style.padding = '';
+            document.querySelector('.footer').style.display = '';
+            document.querySelector('.page-header').style.marginBottom = '12px';
+        }
+        setLayout();
+        setTimeout(doResize, 100);
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isFullscreen) fullscreenBtn.click();
+    });
+
     initTerminal();
 })();
 </script>
