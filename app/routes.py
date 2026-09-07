@@ -152,10 +152,20 @@ def brute_force():
     event_pages = max(math.ceil(total_events / per_page), 1)
     page_events = all_events[start:end]
 
+    # 对 top_invalid_users 分页
+    all_invalid = data.get('top_invalid_users', [])
+    total_invalid = len(all_invalid)
+    invalid_pages = max(math.ceil(total_invalid / per_page), 1)
+    page_invalid = all_invalid[start:end]
+
+    # 总页数取所有表格的最大值
+    max_pages = max(total_pages, user_pages, event_pages, invalid_pages)
+
     pagination = {
-        'page': page, 'per_page': per_page, 'total_pages': total_pages,
-        'total_ips': total_ips, 'total_users': total_users, 'total_events': total_events,
-        'has_prev': page > 1, 'has_next': page < total_pages,
+        'page': page, 'per_page': per_page, 'total_pages': max_pages,
+        'total_ips': total_ips, 'total_users': total_users,
+        'total_events': total_events, 'total_invalid': total_invalid,
+        'has_prev': page > 1, 'has_next': page < max_pages,
         'prev_page': page - 1, 'next_page': page + 1,
         'range_start': start + 1 if total_ips > 0 else 0,
         'range_end': min(end, total_ips),
@@ -164,6 +174,7 @@ def brute_force():
     data['top_ips'] = page_ips
     data['top_users'] = page_users
     data['recent_events'] = page_events
+    data['top_invalid_users'] = page_invalid
 
     return render_template('brute_force.html', data=data, lastb=lastb,
                            days=days, pagination=pagination,

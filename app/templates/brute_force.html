@@ -150,13 +150,24 @@
         <tbody>
             {% for u in data.top_invalid_users %}
             <tr>
-                <td>{{ loop.index }}</td>
+                <td>{{ pagination.range_start + loop.index0 }}</td>
                 <td class="mono">{{ u.user }}</td>
                 <td><strong>{{ u.count }}</strong></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <span style="font-size:12px;color:var(--text-dim);">第 {{ pagination.page }} 页 · 每页 {{ pagination.per_page }} 条</span>
+        <div style="display:flex;gap:4px;">
+            {% if pagination.has_prev %}
+            <a href="?days={{ days }}&page={{ pagination.prev_page }}&per_page={{ pagination.per_page }}" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">← 上一页</a>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a href="?days={{ days }}&page={{ pagination.next_page }}&per_page={{ pagination.per_page }}" style="padding:4px 12px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;">下一页 →</a>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endif %}
