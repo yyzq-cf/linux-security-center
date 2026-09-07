@@ -65,6 +65,8 @@ RE_ACCEPTED = re.compile(
     r'Accepted password|Accepted publickey|session opened'
 )
 RE_DATE_PREFIX = re.compile(r'^(\w{3}\s+\d+\s+\d{2}:\d{2}:\d{2})')
+# ISO 8601 格式: 2026-09-06T00:00:03.891187+08:00
+RE_ISO_DATE = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})')
 
 
 def analyze_brute_force(days=7, top=20):
@@ -87,16 +89,27 @@ def analyze_brute_force(days=7, top=20):
     ip_users = defaultdict(set)
 
     for line in lines:
-        # 提取日期
-        date_match = RE_DATE_PREFIX.search(line)
+        # 提取日期（兼容传统syslog和ISO8601格式）
         event_date = None
-        if date_match:
+        iso_match = RE_ISO_DATE.search(line)
+        if iso_match:
             try:
-                event_date = datetime.strptime(
-                    date_match.group(1) + f' {now.year}', '%b %d %H:%M:%S %Y'
-                )
+                event_date = datetime.strptime(iso_match.group(1), '%Y-%m-%dT%H:%M:%S')
             except ValueError:
                 pass
+        if not event_date:
+            date_match = RE_DATE_PREFIX.search(line)
+            if date_match:
+                try:
+                    event_date = datetime.strptime(
+                        date_match.group(1) + f' {now.year}', '%b %d %H:%M:%S %Y'
+                    )
+                except ValueError:
+                    pass
+
+        # 跳过不在时间范围内的日志
+        if event_date and event_date < cutoff:
+            continue
 
         # Failed password
         m = RE_FAILED_PW.search(line)
@@ -106,10 +119,10 @@ def analyze_brute_force(days=7, top=20):
             ip_failures[ip] += 1
             user_failures[user] += 1
             ip_users[ip].add(user)
-            if event_date and event_date >= cutoff:
+            if event_date:
                 key = event_date.strftime('%Y-%m-%d')
                 timeline[key] += 1
-                if len(recent_events) < 200:
+                if len(recent_events) < 500:
                     recent_events.append({
                         'time': event_date.strftime('%m-%d %H:%M:%S'),
                         'type': 'Failed Password',
