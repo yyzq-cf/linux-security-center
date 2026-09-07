@@ -104,7 +104,9 @@
                     <td><strong>{{ ip.count }}</strong></td>
                     <td style="font-size:12px">{{ ip.users }}</td>
                     <td><span class="badge {{ ip.danger }}">{{ ip.danger }}</span></td>
-                    <td><button class="btn" onclick="blockIp('{{ ip.ip }}')" style="border-color:var(--red);color:var(--red)">🔴 封禁</button></td>
+                    <td id="ip-status-{{ ip.ip }}">
+                    <button class="btn" onclick="blockIp('{{ ip.ip }}')" style="border-color:var(--red);color:var(--red)">🔴 封禁</button>
+                </td>
                 </tr>
                 {% else %}
                 <tr><td colspan="6" style="text-align:center;color:var(--text-dim)">无数据</td></tr>
@@ -441,6 +443,18 @@ function loadBanned() {
         }
         bannedData = data.banned;
         renderBanned();
+        // 同步标记攻击IP表中的已封禁状态
+        var bannedSet = {};
+        data.banned.forEach(function(item) { bannedSet[item.ip] = true; });
+        // 遍历攻击IP表的状态单元格
+        document.querySelectorAll('td[id^="ip-status-"]').forEach(function(td) {
+            var ip = td.id.replace('ip-status-', '');
+            if (bannedSet[ip]) {
+                td.innerHTML = '<span class="badge pass" style="font-size:11px;">🔒 已封禁</span>';
+            } else {
+                td.innerHTML = '<button class="btn" onclick="blockIp(\'' + ip + '\')" style="border-color:var(--red);color:var(--red)">🔴 封禁</button>';
+            }
+        });
     })
     .catch(e => {
         document.getElementById('banned-list-area').innerHTML = '<div style="color:var(--red);text-align:center;padding:20px 0;">加载失败</div>';
