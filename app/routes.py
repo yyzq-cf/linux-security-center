@@ -414,6 +414,63 @@ def unblock_ip():
     return jsonify({'ok': False, 'msg': f'解封失败: {r.stderr.strip()[:200]}'})
 
 
+@bp.route('/api/block-all-ips', methods=['POST'])
+@login_required
+def block_all_ips():
+    """一键封禁所有攻击IP（通过fail2ban批量封禁）"""
+    import subprocess
+
+    # 获取所有攻击IP列表
+    data = request.json or {}
+    ips = data.get('ips', [])
+    jail = data.get('jail', 'sshd')
+
+    # 如果没传IP列表，自动从暴力破解数据获取所有攻击IP
+    if not ips:
+        brute = analyze_brute_force(days=30, top=200)
+        ips = [item['ip'] for item in brute.get('top_ips', [])]
+
+    if not ips:
+        return jsonify({'ok': False, 'msg': '没有可封禁的攻击IP'})
+
+    # 获取当前已封禁的IP，避免重复
+    r_status = _fail2ban_cmd(['status', jail])
+    already_banned = set()
+    if r_status.returncode == 0:
+        for line in r_status.stdout.splitlines():
+            if 'Banned IP list:' in line:
+                already_banned = set(line.split(':', 1)[1].strip().split())
+                break
+
+    to_ban = [ip for ip in ips if ip not in already_banned]
+    if not to_ban:
+        return jsonify({'ok': True, 'msg': f'所有{len(already_banned)}个攻击IP均已封禁', 'count': 0})
+
+    # 批量封禁（用fail2ban-client的循环模式，一次调用）
+    import subprocess
+    use_chroot = os.path.isdir('/host/bin')
+    prefix = ['chroot', '/host'] if use_chroot else []
+    success = 0
+    failed = []
+    for ip in to_ban:
+        try:
+            r = subprocess.run(
+                prefix + ['fail2ban-client', 'set', jail, 'banip', ip],
+                capture_output=True, text=True, timeout=5
+            )
+            if r.returncode == 0:
+                success += 1
+            else:
+                failed.append(ip)
+        except Exception:
+            failed.append(ip)
+
+    msg = f'已封禁 {success}/{len(to_ban)} 个IP'
+    if failed:
+        msg += f'，失败{len(failed)}个'
+    return jsonify({'ok': True, 'msg': msg, 'count': success})
+
+
 @bp.route('/api/banned-ips')
 @login_required
 def banned_ips():

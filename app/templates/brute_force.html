@@ -58,7 +58,10 @@
 <div class="grid grid-2">
     <!-- TOP攻击IP -->
     <div class="card">
-        <div class="card-title">🚨 攻击源 IP 排行</div>
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>🚨 攻击源 IP 排行</span>
+            <button id="block-all-btn" class="btn" style="border-color:var(--red);color:var(--red);padding:4px 12px;font-size:12px;" onclick="blockAllIps()">⚡ 一键封禁全部</button>
+        </div>
         <div class="table-wrap">
         <table>
             <thead>
@@ -232,6 +235,30 @@ function fmtDuration(secs) {
     if (h > 0) return h + '小时' + m + '分';
     if (m > 0) return m + '分' + s + '秒';
     return s + '秒';
+}
+
+function blockAllIps() {
+    if (!confirm('确认通过 fail2ban 一键封禁所有攻击源IP？')) return;
+    var btn = document.getElementById('block-all-btn');
+    btn.disabled = true;
+    btn.textContent = '封禁中...';
+    fetch('/api/block-all-ips', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        alert(data.msg || (data.ok ? '封禁成功' : '封禁失败'));
+        btn.disabled = false;
+        btn.textContent = '⚡ 一键封禁全部';
+        if (data.ok) loadBanned();
+    })
+    .catch(e => {
+        alert('请求失败: ' + e);
+        btn.disabled = false;
+        btn.textContent = '⚡ 一键封禁全部';
+    });
 }
 
 function loadBanned() {
