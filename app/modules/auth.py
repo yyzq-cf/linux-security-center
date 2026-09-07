@@ -46,6 +46,7 @@ def _save_config(config):
     _ensure_data_dir()
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=2)
+    os.chmod(CONFIG_FILE, 0o600)
 
 
 def _init_config(username, password):

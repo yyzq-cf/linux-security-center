@@ -15,6 +15,7 @@ def _get_secret_key():
         return key_file.read_text().strip()
     key = os.urandom(32).hex()
     key_file.write_text(key)
+    os.chmod(key_file, 0o600)
     return key
 
 
