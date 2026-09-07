@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block title %}暴力破解详情 · Linux 安全中心{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>暴力破解分析</h1>
-    <div class="subtitle">基于 SSH 认证日志 · 检测暴力破解行为 · 支持IP封禁</div>
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+        <h1>暴力破解分析</h1>
+        <div class="subtitle">基于 SSH 认证日志 · 检测暴力破解行为 · 支持IP封禁</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <span id="last-update" style="font-size:12px;color:var(--text-dim);"></span>
+        <button id="manual-refresh" class="btn" style="border-color:var(--accent);color:var(--accent);padding:6px 16px;font-size:13px;border-radius:8px;" onclick="manualRefresh()">🔄 刷新</button>
+    </div>
 </div>
 
 <!-- 时间筛选 -->
@@ -282,6 +288,24 @@ function fmtDuration(secs) {
     if (m > 0) return m + '分' + s + '秒';
     return s + '秒';
 }
+
+function updateTimestamp() {
+    var now = new Date();
+    var el = document.getElementById('last-update');
+    if (el) el.textContent = '更新于 ' + now.toLocaleTimeString('zh-CN');
+}
+
+function manualRefresh() {
+    var btn = document.getElementById('manual-refresh');
+    btn.disabled = true;
+    btn.textContent = '刷新中...';
+    location.reload();
+}
+
+// 页面加载时记录时间
+updateTimestamp();
+// 每30秒自动刷新
+setInterval(function() { location.reload(); }, 30000);
 
 function blockAllIps() {
     if (!confirm('确认通过 fail2ban 一键封禁所有攻击源IP？')) return;
