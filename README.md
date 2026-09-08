@@ -47,6 +47,8 @@
 - `GET /api/security-audit` — 安全审计数据JSON
 - `POST /api/block-ip` — iptables封禁IP
 
+🔗 **GitHub**: [github.com/yyzq-cf/linux-security-center](https://github.com/yyzq-cf/linux-security-center)
+
 ## 🚀 部署
 
 ```bash
