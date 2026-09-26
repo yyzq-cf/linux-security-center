@@ -112,6 +112,12 @@ environment:
 - 首次登录后建议立即修改密码并启用2FA
 - 仅供安全审计参考，不替代专业安全工具
 
+## ☕ 请作者喝杯咖啡
+
+如果这个项目对你有帮助，欢迎请作者喝杯咖啡 ☕️
+
+![打赏码](assets/donation.jpg)
+
 ## 🙏 致谢
 
 - [Flask](https://flask.palletsprojects.com/) — Web 框架
